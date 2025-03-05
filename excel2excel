@@ -1,0 +1,62 @@
+import pandas as pd
+
+# Define file paths
+config_file = "config.xlsx"  # Configuration file
+target_file = "target.xlsx"  # Target file
+
+# Load target Excel metadata
+excel_data = pd.ExcelFile(target_file)
+
+# Dictionary to store modified sheets
+updated_sheets = {}
+
+# Process each sheet in the config file
+for sheet_name in pd.ExcelFile(config_file).sheet_names:
+    # Read the config sheet (optimized)
+    config_df = pd.read_excel(config_file, sheet_name=sheet_name, dtype=str).fillna("")
+
+    # Ensure required columns exist
+    if "Field Name" not in config_df.columns or "Visible" not in config_df.columns:
+        print(f"Skipping '{sheet_name}': Missing 'Field Name' or 'Visible' column.")
+        continue
+
+    # Check if the sheet exists in the target file
+    if sheet_name not in excel_data.sheet_names:
+        print(f"Skipping '{sheet_name}': Not found in target file.")
+        continue
+
+    # Read the target sheet (optimized)
+    target_df = pd.read_excel(target_file, sheet_name=sheet_name, dtype=str).fillna("")
+
+    # Ensure required columns exist in target
+    if "Field Name" not in target_df.columns or "Visible" not in target_df.columns:
+        print(f"Skipping '{sheet_name}': Missing 'Field Name' or 'Visible' column in target.")
+        continue
+
+    # Convert 'Field Name' to index for faster lookups
+    target_df.set_index("Field Name", inplace=True)
+
+    # Convert config 'Field Name' to a dictionary for mapping
+    visibility_map = config_df.set_index("Field Name")["Visible"].map(lambda x: "True" if x.strip() == "X" else "False").to_dict()
+
+    # Apply visibility changes where applicable
+    changed_rows = target_df.index.intersection(visibility_map.keys())
+
+    if not changed_rows.empty:
+        print(f"Updating '{sheet_name}': {len(changed_rows)} rows affected.")
+        target_df.loc[changed_rows, "Visible"] = target_df.index.map(visibility_map)
+
+    # Reset index before saving
+    target_df.reset_index(inplace=True)
+
+    # Store only modified sheets
+    updated_sheets[sheet_name] = target_df
+
+# Write back only modified sheets (optimized)
+if updated_sheets:
+    with pd.ExcelWriter(target_file, engine="openpyxl", mode="a", if_sheet_exists="replace") as writer:
+        for sheet, data in updated_sheets.items():
+            data.to_excel(writer, sheet_name=sheet, index=False)
+    print("Excel file updated successfully.")
+else:
+    print("No changes made.")
