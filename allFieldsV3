@@ -1,0 +1,41 @@
+import arcpy
+
+# Open the current ArcGIS Pro project
+aprx = arcpy.mp.ArcGISProject("CURRENT")
+
+# Loop through all maps in the project
+for m in aprx.listMaps():
+    for lyr in m.listLayers():
+        if lyr.isFeatureLayer:
+            try:
+                # Get the layer's CIM definition
+                cim_lyr = lyr.getDefinition('V3')
+                
+                # Ensure the layer has a feature table
+                if hasattr(cim_lyr, 'featureTable') and cim_lyr.featureTable is not None:
+                    # Get all field names using .name
+                    field_names = [field.name for field in arcpy.ListFields(lyr)]
+                    
+                    # Build new field descriptions with visibility set to True
+                    new_field_descriptions = []
+                    for field_name in field_names:
+                        field_desc = arcpy.cim.FieldDescription()
+                        field_desc.name = field_name
+                        field_desc.visible = True
+                        new_field_descriptions.append(field_desc)
+
+                    # Replace the field descriptions with the new list
+                    cim_lyr.featureTable.fieldDescriptions = new_field_descriptions
+
+                    # Apply the updated CIM definition
+                    lyr.setDefinition(cim_lyr)
+                    
+                    print(f"Enabled all fields for layer: {lyr.name}")
+                else:
+                    print(f"Layer {lyr.name} does not have a feature table.")
+            except Exception as e:
+                print(f"Could not update fields for layer {lyr.name}: {e}")
+
+# Save changes
+aprx.save()
+print("All fields are now visible.")
